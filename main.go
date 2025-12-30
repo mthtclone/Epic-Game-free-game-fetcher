@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	"flag"
+	"os"
+	"strings"
+	"path/filepath"
 )
 
 type EpicResponse struct {
@@ -21,11 +25,17 @@ type Game struct {
 	Title       string     `json:"title"`
 	ProductSlug string     `json:"productSlug"`
 	Status      string     `json:"status"`
-	Promotions  Promotions `json:"promotions"`
 	ExpiryDate  string     `json:"expiryDate"`
 }
 
 func main() {
+
+	format := flag.String("format", "text", "Output format: text, json, html")
+	output := flag.String("output", "", "Output file path")
+	appendMode := flag.Bool("append", false, "Append to existing file")
+	// stateFile := flag.String("state", "state.json", "Path to state JSON file")
+
+	flag.Parse()
 
 	var games []Game
 	var err error
@@ -44,18 +54,47 @@ func main() {
 		fmt.Println("Failed to fetch games after 3 attempts:", err)
 		return
 	}
-	
-	now := time.Now().UTC()
-	fmt.Println("Currently Free Epic Games:\n")
 
-	for _, game := range games {
-		if isCurrentlyFree(game, now) && game.ProductSlug != "" {
-			fmt.Println(game.Title)
-			fmt.Println("https://store.epicgames.com/p/" + game.ProductSlug)
-			fmt.Println()
+	freeGames := normalizeData(games, time.Now().UTC())
+	f := inferFormat(*output, *format)
+	
+	var data []byte
+
+	switch f {
+	case "text":
+		fmt.Print("Formatting in Text\n")
+		data = []byte(FormatText(freeGames))
+
+	case "json":
+		fmt.Print("Formatting in JSON\n")
+		var err error
+		data, err = FormatJSON(freeGames)
+		if err != nil {
+			panic(err)
 		}
+
+	case "html":
+		fmt.Print("Formatting in HTML\n")
+		htmlOut, err := FormatHTML(freeGames)
+		if err != nil {
+			panic(err)
+		}
+		data = []byte(htmlOut)
+
+	default:
+		panic("Unknown format, please specify format: text, json, or html")
 	}
-}
+
+	if *output != "" {
+		if *appendMode {
+			appendFile(*output, data)
+		} else {
+			writeFile(*output, data)
+		} 
+	} else {
+		fmt.Print(string(data))
+	}
+ }
 
 func fetchGames() ([]Game, error) {
 	url := "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
@@ -70,6 +109,8 @@ func fetchGames() ([]Game, error) {
 	}
 
 	resp, err := client.Do(req)
+	req.Header.Set("User-Agent", "epic-free-game-fetcher/1.0")
+
 	if err != nil {
 		return nil, err
 	}
@@ -103,4 +144,65 @@ func isCurrentlyFree(game Game, now time.Time) bool {
 	}
 
 	return now.Before(end)
+}
+
+func normalizeData(games []Game, now time.Time) []Formatter {
+	var result []Formatter
+	for _, game := range games {
+		if !isCurrentlyFree(game, now) || game.ProductSlug == "" {
+			continue
+		}
+
+		end, err := time.Parse(time.RFC3339, game.ExpiryDate)
+		if err != nil {
+			continue
+		}
+
+		result = append(result, Formatter{
+			Title:			game.Title,
+			ProductSlug:	game.ProductSlug,
+			ExpiryDate:		end,
+			URL:         	"https://store.epicgames.com/p/" + game.ProductSlug,			
+		})
+	}
+
+	return result
+}
+
+func inferFormat(output, explicitFormat string) string {
+	if explicitFormat != "" {
+		return strings.ToLower(explicitFormat)
+	}
+
+	if output != "" {
+		ext := strings.ToLower(filepath.Ext(output))
+		switch ext {
+		case ".json":
+			return "json"
+		case ".html", ".htm":
+			return "html"
+		case ".txt":
+			return "text"
+		}
+	}
+
+	return "text"
+}
+
+func writeFile(path string, data []byte) {
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		panic(err)
+	}
+}
+
+func appendFile(path string, data []byte) {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	if _, err := f.Write(data); err != nil {
+		panic(err)
+	}
 }
