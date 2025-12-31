@@ -60,7 +60,7 @@ func main() {
 	f := inferFormat(*output, *format)
 
 	if len(freeGames) == 0 {
-		notify("No Free Games to claim today!")
+		notify("No Free Games to claim today!", "")
 	} else {
 		for _, game := range freeGames {
 			err := notify("Free Game Available!", game.Title + " is free until "+ game.ExpiryDate.Format("Mon Jan 2 15:04:05 2006 MST"))
