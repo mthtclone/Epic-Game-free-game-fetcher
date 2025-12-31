@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"path/filepath"
+	"github.com/go-toast/toast"
 )
 
 type EpicResponse struct {
@@ -57,6 +58,17 @@ func main() {
 
 	freeGames := normalizeData(games, time.Now().UTC())
 	f := inferFormat(*output, *format)
+
+	if len(freeGames) == 0 {
+		notify("No Free Games to claim today!")
+	} else {
+		for _, game := range freeGames {
+			err := notify("Free Game Available!", game.Title + " is free until "+ game.ExpiryDate.Format("Mon Jan 2 15:04:05 2006 MST"))
+			if err != nil {
+				fmt.Printf("Failed to send notification for %s: %v\n", game.Title, err)
+			}
+		}
+	}
 	
 	var data []byte
 
@@ -70,19 +82,22 @@ func main() {
 		var err error
 		data, err = FormatJSON(freeGames)
 		if err != nil {
-			panic(err)
+			fmt.Printf("Failed to format in JSON: %v\n", err)
+        	data = nil
 		}
 
 	case "html":
 		fmt.Print("Formatting in HTML\n")
 		htmlOut, err := FormatHTML(freeGames)
 		if err != nil {
-			panic(err)
+			fmt.Printf("Failed to format in HTML: %v\n", err)
+        	data = nil
 		}
 		data = []byte(htmlOut)
 
 	default:
 		panic("Unknown format, please specify format: text, json, or html")
+		data = nil
 	}
 
 	if *output != "" {
@@ -91,6 +106,9 @@ func main() {
 		} else {
 			writeFile(*output, data)
 		} 
+		if err != nil {
+			fmt.Printf("Failed to write to file %s: %v\n", *output, err)
+		}
 	} else {
 		fmt.Print(string(data))
 	}
@@ -205,4 +223,15 @@ func appendFile(path string, data []byte) {
 	if _, err := f.Write(data); err != nil {
 		panic(err)
 	}
+}
+
+func notify(title, message string) error {
+	notification := toast.Notification{
+		AppID:		"Free Epic Game Watcher",
+		Title:		title,
+		Message: 	message,
+		Icon:		"",
+	}
+
+	return notification.Push()
 }
