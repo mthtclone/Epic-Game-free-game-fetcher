@@ -5,16 +5,10 @@ import (
 	"encoding/json"
 	"html/template"
 	"time"
+	"github.com/mthtclone/Epic-Game-free-game-fetcher/pkg/epic" 
 )
 
-type Formatter struct {
-	Title		string 		
-	ProductSlug string 		
-	ExpiryDate	time.Time	
-	URL			string		
-}
-
-func FormatText(games []Formatter) string {
+func FormatText(games []epic.Formatter) string {
 	var buf bytes.Buffer
 
 	for _, game := range games {
@@ -26,11 +20,11 @@ func FormatText(games []Formatter) string {
 	return buf.String()
 }
 
-func FormatJSON(games []Formatter) ([]byte, error) {
+func FormatJSON(games []epic.Formatter) ([]byte, error) {
 	return json.MarshalIndent(games, "", "  ")
 }
 
-func FormatHTML(games []Formatter) (string, error) {
+func FormatHTML(games []epic.Formatter) (string, error) {
 	const tpl = `
 <!DOCTYPE html>
 <html>

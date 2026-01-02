@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"time"
 	"flag"
-	"free-game-fetcher-bot/pkg/epic" 
+	"strings"
+	"path/filepath"
+	"github.com/mthtclone/Epic-Game-free-game-fetcher/pkg/epic" 
 )
 
 func main() {
@@ -21,9 +23,25 @@ func main() {
 	}
 
 	freeGames := epic.NormalizeData(games, time.Now().UTC())
-	fmt.Println(freeGames)
-
 	f := epic.InferFormat(*output, *format)
+
+	if *format != "" && *output != "" {
+		ext := strings.ToLower(filepath.Ext(*output))
+		expected := ""
+		switch ext {
+		case ".json":
+			expected = "json"
+		case ".html", ".htm":
+			expected = "html"
+		case ".txt":
+			expected = "text"
+		}
+
+		if expected != "" && f != expected {
+			fmt.Printf("Error: output file extension '%s' does not match specified format '%s'\n", ext, *format)
+			return
+		}
+	}
 
 	var data []byte
 
