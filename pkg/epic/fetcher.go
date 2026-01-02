@@ -150,3 +150,18 @@ func Notify(title, message string) error {
 	}
 	return notification.Push()
 }
+
+// RunAt schedules a function to run daily at a specific time 
+func RunAt(hour, min int, task func()) {
+	go func() {
+		for {
+			now := time.Now()
+			next := time.Date(now.Year(), now.Month(), now.Day(), hour, min, 0, 0, now.Location())
+			if next.Before(now) {
+				next = next.Add(24 * time.Hour)
+			}
+			time.Sleep(time.Until(next))
+			task()
+		}
+	}()
+}

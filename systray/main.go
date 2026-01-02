@@ -1,0 +1,78 @@
+package main 
+
+import (
+	"fmt"
+	"time"
+	_ "embed"
+
+	"github.com/getlantern/systray"
+	"github.com/mthtclone/Epic-Game-free-game-fetcher/pkg/epic"
+)
+
+//go:embed icon.ico
+var iconData []byte
+
+func main () {
+	systray.Run(onReady, onExit)
+}
+
+func onReady() {
+	systray.SetTitle("Free Epic Game Fetcher")
+	systray.SetTooltip("Claim free games from Epic Games store on time.")
+	systray.SetIcon(iconData)
+
+	mRefresh := systray.AddMenuItem("Refresh Now", "Check for free games now.")
+	mQuit := systray.AddMenuItem("Quit", "Click to disable service.")
+
+	epic.RunAt(22, 30, func() {
+		games, err := epic.FetchGames()
+		if err != nil {
+			fmt.Println("Failed to fetch games: %v\n", err)
+			return
+		}
+		freeGames := epic.NormalizeData(games, time.Now().UTC())
+		if len(freeGames) == 0 {
+			epic.Notify("No Free Games", "")
+		} else {
+			for _, g := range freeGames {
+				epic.Notify("Free Game Available!", g.Title+" until "+g.ExpiryDate.Format("Mon Jan 2 15:04 MST"))
+			}
+		}
+	})
+
+	go func() {
+		for {
+			select {
+			case <-mRefresh.ClickedCh:
+				fmt.Println("Refreshing games...")
+				games, err := epic.FetchGames()
+				if err != nil {
+					fmt.Printf("Failed to fetch games: %v\n", err)
+					continue
+				}
+
+				freeGames := epic.NormalizeData(games, time.Now().UTC())
+				if len(freeGames) == 0 {
+					epic.Notify("No Free Games", "")
+				} else {
+					for _, g := range freeGames {
+						epic.Notify("Free Game Available!", g.Title+" until "+g.ExpiryDate.Format("Mon Jan 2 15:04 MST"))
+					}
+				}
+
+			case <-mQuit.ClickedCh:
+				systray.Quit()
+				return
+			}
+		}
+	}()
+}
+
+func onExit() {
+	fmt.Println("Exiting...")
+}
+
+// build cmd
+// cd systray
+// set G0111MODULE=on
+// go build -ldflags "-H windowsgui" -o freeEpicWatcher.exe main.go
