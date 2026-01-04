@@ -6,6 +6,7 @@ import (
 	_ "embed"
 
 	"github.com/getlantern/systray"
+	"github.com/ncruces/zenity"
 	"github.com/mthtclone/Epic-Game-free-game-fetcher/pkg/epic"
 )
 
@@ -14,6 +15,14 @@ var iconData []byte
 
 func main () {
 	systray.Run(onReady, onExit)
+	
+	cfg, err := epic.LoadConfig()
+	if err != nil {
+		fmt.Printf("Failed to load config: %v\n", err)
+	} else if cfg.Timezone != "" {
+		_ = epic.SetTimeZone(cfg.Timezone)
+	}
+
 }
 
 func onReady() {
@@ -22,6 +31,7 @@ func onReady() {
 	systray.SetIcon(iconData)
 
 	mRefresh := systray.AddMenuItem("Refresh Now", "Check for free games now.")
+	mSetTime := systray.AddMenuItem("Adjust timezone", "Adjust time according to your time-zone.")
 	mQuit := systray.AddMenuItem("Quit", "Click to disable service.")
 
 	epic.RunAt(22, 30, func() {
@@ -58,6 +68,21 @@ func onReady() {
 					for _, g := range freeGames {
 						epic.Notify("Free Game Available!", g.Title+" until "+g.ExpiryDate.Format("Mon Jan 2 15:04 MST"))
 					}
+				}
+			
+			case <-mSetTime.ClickedCh:
+				fmt.Println("Adjusting Time")
+				input, err := zenity.Entry("Enter your timezone (-> Asia/Tokyo):", zenity.Title("Set Timezone"))
+				if err != nil {
+					fmt.Printf("Timezone input canceled or error: %v\n", err)
+					break
+				}
+				if err := epic.SetTimeZone(input); err != nil {
+					fmt.Printf("Failed to set timezone: %v\n", err)
+					epic.Notify("Fail to update Timezone", input)
+				} else {
+					fmt.Printf("Timezone set to %s\n", input)
+					epic.Notify("Timezone Updated", "Timezone set to "+input)
 				}
 
 			case <-mQuit.ClickedCh:

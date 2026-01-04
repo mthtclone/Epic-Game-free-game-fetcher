@@ -28,6 +28,34 @@ type Formatter struct {
 	URL         string
 }
 
+// Config struct for storing timezone
+type Config struct {
+	Timezone string `json:"timezone"`
+}
+
+var configFile = "config.json"
+
+func SaveConfig(cfg Config) error {
+	data, err := json.MarshalIndent(cfg, "", " ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configFile, data, 0644)
+}
+
+func LoadConfig() (Config, error) {
+	cfg := Config{}
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		return cfg, nil
+	}
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return cfg, err
+	}
+	err = json.Unmarshal(data, &cfg)
+	return cfg, err 
+}
+
 // FetchGames fetches the free games from Epic API
 func FetchGames() ([]Game, error) {
 	url := "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
@@ -151,12 +179,13 @@ func Notify(title, message string) error {
 	return notification.Push()
 }
 
-// RunAt schedules a function to run daily at a specific time 
+// RunAt schedules a function to run daily at a specific time in the set timezone
 func RunAt(hour, min int, task func()) {
 	go func() {
 		for {
-			now := time.Now()
-			next := time.Date(now.Year(), now.Month(), now.Day(), hour, min, 0, 0, now.Location())
+			loc := GetTimeZone() 
+			now := time.Now().In(loc)
+			next := time.Date(now.Year(), now.Month(), now.Day(), hour, min, 0, 0, loc)
 			if next.Before(now) {
 				next = next.Add(24 * time.Hour)
 			}
@@ -164,4 +193,26 @@ func RunAt(hour, min int, task func()) {
 			task()
 		}
 	}()
+}
+
+// SetTimeZone sets the timezone for scheduled tasks
+var location *time.Location = time.UTC
+func SetTimeZone(tz string) error {
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return err
+	}
+	location = loc
+
+	cfg := Config{Timezone: tz}
+	if err := SaveConfig(cfg); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetTimeZone returns the currently set timezone
+func GetTimeZone() *time.Location {
+	return location
 }
