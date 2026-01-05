@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"time"
+	_ "time/tzdata"
 	_ "embed"
 
 	"github.com/getlantern/systray"
@@ -14,7 +15,6 @@ import (
 var iconData []byte
 
 func main () {
-	systray.Run(onReady, onExit)
 	
 	cfg, err := epic.LoadConfig()
 	if err != nil {
@@ -23,6 +23,7 @@ func main () {
 		_ = epic.SetTimeZone(cfg.Timezone)
 	}
 
+	systray.Run(onReady, onExit)
 }
 
 func onReady() {
@@ -57,7 +58,7 @@ func onReady() {
 				fmt.Println("Refreshing games...")
 				games, err := epic.FetchGames()
 				if err != nil {
-					fmt.Printf("Failed to fetch games: %v\n", err)
+					epic.Notify("Fail to fetch games.", "")
 					continue
 				}
 
@@ -72,15 +73,35 @@ func onReady() {
 			
 			case <-mSetTime.ClickedCh:
 				fmt.Println("Adjusting Time")
-				input, err := zenity.Entry("Enter your timezone (-> Asia/Tokyo):", zenity.Title("Set Timezone"))
+				currentTZ := epic.GetTimeZone().String()
+
+				zenity.Info(
+					"Currently set timezone:\n\n"+currentTZ,
+					zenity.Title("Current Timezone"),
+				)
+
+				input, err := zenity.Entry(
+					"Enter your timezone (-> Asia/Tokyo):", 
+					zenity.Title("Set Timezone"),
+				)
+				
 				if err != nil {
 					fmt.Printf("Timezone input canceled or error: %v\n", err)
+					epic.Notify("Input Canceled", input)
 					break
 				}
+
 				if err := epic.SetTimeZone(input); err != nil {
 					fmt.Printf("Failed to set timezone: %v\n", err)
 					epic.Notify("Fail to update Timezone", input)
 				} else {
+					updatedTZ := epic.GetTimeZone().String()
+
+					zenity.Info(
+						"Updated Timezone:\n\n"+updatedTZ,
+						zenity.Title("Updated Timezone"),
+					)
+
 					fmt.Printf("Timezone set to %s\n", input)
 					epic.Notify("Timezone Updated", "Timezone set to "+input)
 				}
